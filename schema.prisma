@@ -1,0 +1,293 @@
+// prisma/schema.prisma
+// FuelMatch — Schema completo do banco de dados
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────
+
+enum Role {
+  NUTRITIONIST
+  ATHLETE
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum Goal {
+  HYPERTROPHY
+  CUTTING
+  BODY_RECOMPOSITION
+  MAINTENANCE
+}
+
+enum TrainingExperience {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum MealType {
+  PRE_WORKOUT
+  INTRA_WORKOUT
+  POST_WORKOUT
+  REGULAR
+}
+
+enum FoodSource {
+  TACO
+  CUSTOM
+  BARCODE
+}
+
+enum TrainingIntensity {
+  HEAVY
+  MODERATE
+  LIGHT
+  REST
+}
+
+enum AlertType {
+  WEIGHT_STAGNATION
+  LOW_ADHERENCE
+  LOW_ENERGY
+  MISSED_CHECKIN
+  GOAL_ACHIEVED
+  PLATEAU_RISK
+}
+
+enum AlertSeverity {
+  CRITICAL
+  WARNING
+  INFO
+}
+
+enum SubscriptionPlan {
+  ATHLETE_FREE
+  ATHLETE_PRO
+  NUTRITIONIST_PRO
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+// ─── MODELOS ──────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(ATHLETE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  nutritionist  Nutritionist?
+  athlete       Athlete?
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model Nutritionist {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String
+  crnNumber   String   @unique
+  specialties String[]
+  bio         String?
+  photoUrl    String?
+  instagramUrl String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  athletes     Athlete[]
+  mealPlans    MealPlan[]
+  alerts       Alert[]
+  subscription Subscription?
+
+  @@map("nutritionists")
+}
+
+model Athlete {
+  id                  String             @id @default(uuid())
+  userId              String             @unique
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nutritionistId      String?
+  nutritionist        Nutritionist?      @relation(fields: [nutritionistId], references: [id])
+  fullName            String
+  birthDate           DateTime
+  gender              Gender
+  heightCm            Float
+  weightKg            Float
+  bodyFatPercent      Float?
+  leanMassKg          Float?
+  goal                Goal
+  trainingExperience  TrainingExperience @default(BEGINNER)
+  trainingDaysPerWeek Int                @default(4)
+  anamnesis           Json?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  mealPlans    MealPlan[]
+  checkIns     CheckIn[]
+  trainingLogs TrainingLog[]
+  subscription Subscription?
+
+  @@map("athletes")
+}
+
+model MealPlan {
+  id               String   @id @default(uuid())
+  athleteId        String
+  athlete          Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  nutritionistId   String
+  nutritionist     Nutritionist @relation(fields: [nutritionistId], references: [id])
+  name             String
+  isActive         Boolean  @default(false)
+  baseCalories     Float
+  baseProteinG     Float
+  baseCarbsG       Float
+  baseFatG         Float
+  periodizationRules Json?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  meals Meal[]
+
+  @@map("meal_plans")
+}
+
+model Meal {
+  id         String    @id @default(uuid())
+  mealPlanId String
+  mealPlan   MealPlan  @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  name       String
+  timeOfDay  String    // ex: "07:00"
+  mealType   MealType  @default(REGULAR)
+  order      Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  foods MealFood[]
+
+  @@map("meals")
+}
+
+model Food {
+  id        String     @id @default(uuid())
+  name      String
+  brand     String?
+  per100g   Boolean    @default(true)
+  calories  Float
+  proteinG  Float
+  carbsG    Float
+  fatG      Float
+  fiberG    Float?
+  sodiumMg  Float?
+  source    FoodSource @default(TACO)
+  createdAt DateTime   @default(now())
+
+  mealFoods MealFood[]
+
+  @@index([name])
+  @@map("foods")
+}
+
+model MealFood {
+  id        String @id @default(uuid())
+  mealId    String
+  meal      Meal   @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  foodId    String
+  food      Food   @relation(fields: [foodId], references: [id])
+  quantityG Float
+
+  @@map("meal_foods")
+}
+
+model CheckIn {
+  id               String   @id @default(uuid())
+  athleteId        String
+  athlete          Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  weekNumber       Int
+  year             Int
+  weightKg         Float?
+  energyLevel      Int      // 1–5
+  sleepQuality     Int      // 1–5
+  adherencePercent Int      // 0–100
+  performanceLevel Int      // 1–5
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  @@unique([athleteId, weekNumber, year])
+  @@map("check_ins")
+}
+
+model TrainingLog {
+  id        String            @id @default(uuid())
+  athleteId String
+  athlete   Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  date      DateTime          @default(now())
+  intensity TrainingIntensity
+  notes     String?
+  createdAt DateTime          @default(now())
+
+  @@map("training_logs")
+}
+
+model Alert {
+  id               String        @id @default(uuid())
+  nutritionistId   String
+  nutritionist     Nutritionist  @relation(fields: [nutritionistId], references: [id], onDelete: Cascade)
+  athleteId        String
+  type             AlertType
+  severity         AlertSeverity
+  message          String
+  isDismissed      Boolean       @default(false)
+  dismissedAt      DateTime?
+  dismissNote      String?
+  createdAt        DateTime      @default(now())
+
+  @@map("alerts")
+}
+
+model Subscription {
+  id               String             @id @default(uuid())
+  nutritionistId   String?            @unique
+  nutritionist     Nutritionist?      @relation(fields: [nutritionistId], references: [id])
+  athleteId        String?            @unique
+  athlete          Athlete?           @relation(fields: [athleteId], references: [id])
+  plan             SubscriptionPlan
+  status           SubscriptionStatus @default(INACTIVE)
+  pagarmeId        String?            @unique
+  currentPeriodEnd DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@map("subscriptions")
+}
