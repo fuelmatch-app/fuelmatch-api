@@ -22,10 +22,18 @@ export class RegisterDto {
   @IsEnum(Role, { message: 'Role deve ser NUTRITIONIST ou ATHLETE' })
   role: Role;
 
-  @ApiProperty({ example: 'Mariana Silva', required: false })
+  @ApiProperty({ example: 'Mariana Silva' })
+  @IsString()
+  fullName: string;
+
+  /**
+   * Obrigatório apenas para NUTRITIONIST
+   * ex: "CRN-2/12345"
+   */
+  @ApiProperty({ example: 'CRN-2/12345', required: false })
   @IsOptional()
   @IsString()
-  fullName?: string;
+  crnNumber?: string;
 }
 
 export class LoginDto {

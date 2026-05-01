@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -33,15 +34,50 @@ export class AuthService {
       throw new ConflictException('Este email já está cadastrado');
     }
 
+    if (dto.role === Role.NUTRITIONIST && !dto.crnNumber) {
+      throw new ConflictException('CRN é obrigatório para nutricionistas');
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, this.BCRYPT_ROUNDS);
 
+    // Criar usuário + perfil aninhado em uma única transação
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         password: hashedPassword,
         role: dto.role,
+        // Criar perfil aninhado conforme role
+        ...(dto.role === Role.NUTRITIONIST && {
+          nutritionist: {
+            create: {
+              fullName: dto.fullName,
+              crnNumber: dto.crnNumber!,
+              specialties: [],
+            },
+          },
+        }),
+        ...(dto.role === Role.ATHLETE && {
+          athlete: {
+            create: {
+              fullName: dto.fullName,
+              // Valores placeholder — atleta completa no onboarding
+              birthDate: new Date('2000-01-01'),
+              gender: 'MALE' as any,
+              heightCm: 170,
+              weightKg: 70,
+              goal: 'HYPERTROPHY' as any,
+            },
+          },
+        }),
       },
-      select: { id: true, email: true, role: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        nutritionist: { select: { id: true, fullName: true, crnNumber: true } },
+        athlete: { select: { id: true, fullName: true } },
+      },
     });
 
     this.logger.log(`Novo usuário registrado: ${user.email} (${user.role})`);
