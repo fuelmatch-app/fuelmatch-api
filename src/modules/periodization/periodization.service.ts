@@ -55,9 +55,23 @@ export class PeriodizationService {
     return PeriodizationEngine.calculate(plan, intensity, rules);
   }
 
-  async logTraining(athleteId: string, intensity: TrainingIntensity, notes?: string) {
+  /**
+   * Recebe o userId do JWT e resolve o athleteId via banco.
+   * Isso evita depender de um campo athleteId no payload do token.
+   */
+  async logTrainingByUserId(
+    userId: string,
+    intensity: TrainingIntensity,
+    notes?: string,
+  ) {
+    const athlete = await this.prisma.athlete.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!athlete) throw new NotFoundException('Perfil de atleta não encontrado');
+
     return this.prisma.trainingLog.create({
-      data: { athleteId, intensity, notes },
+      data: { athleteId: athlete.id, intensity, notes },
     });
   }
 }

@@ -6,11 +6,14 @@ export class FoodService {
   constructor(private prisma: PrismaService) {}
 
   async search(query: string, limit = 20) {
+    // limit vem como string da query string — converter explicitamente
+    const take = parseInt(String(limit), 10) || 20;
+
     return this.prisma.food.findMany({
       where: {
         name: { contains: query, mode: 'insensitive' },
       },
-      take: limit,
+      take,
       orderBy: { name: 'asc' },
     });
   }

@@ -7,12 +7,14 @@ import * as compression from 'compression';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 3000);
+  const prismaService = app.get(PrismaService);
+  const port    = configService.get<number>('PORT', 3000);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
   // ── Segurança ────────────────────────────────────────────────
@@ -65,14 +67,16 @@ async function bootstrap() {
     console.log(`📚 Swagger: http://localhost:${port}/docs`);
   }
 
-  // ── Health check simples ─────────────────────────────────────
+  // ── Health check com verificação real do banco ───────────────
   const httpAdapter = app.getHttpAdapter();
-  httpAdapter.get('/health', (_req: any, res: any) => {
+  httpAdapter.get('/health', async (_req: any, res: any) => {
+    const dbOk = await prismaService.healthCheck();
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       uptime: Math.floor(process.uptime()),
       environment: nodeEnv,
+      database: dbOk ? 'connected' : 'disconnected',
     });
   });
 

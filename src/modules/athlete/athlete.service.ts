@@ -7,17 +7,22 @@ export class AthleteService {
   constructor(private prisma: PrismaService) {}
 
   async createProfile(userId: string, dto: CreateAthleteDto) {
-    return this.prisma.athlete.create({
-      data: {
-        userId,
-        fullName: dto.fullName,
-        birthDate: new Date(dto.birthDate),
-        gender: dto.gender,
-        heightCm: dto.heightCm,
-        weightKg: dto.weightKg,
-        goal: dto.goal,
-        trainingDaysPerWeek: dto.trainingDaysPerWeek,
-      },
+    // Usa upsert pois o register já cria um Athlete placeholder.
+    // Se já existir (userId único), atualiza com os dados reais do onboarding.
+    const profileData = {
+      fullName: dto.fullName,
+      birthDate: new Date(dto.birthDate),
+      gender: dto.gender,
+      heightCm: dto.heightCm,
+      weightKg: dto.weightKg,
+      goal: dto.goal,
+      trainingDaysPerWeek: dto.trainingDaysPerWeek,
+    };
+
+    return this.prisma.athlete.upsert({
+      where: { userId },
+      update: profileData,
+      create: { userId, ...profileData },
     });
   }
 

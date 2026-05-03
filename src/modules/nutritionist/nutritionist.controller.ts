@@ -1,5 +1,6 @@
-import { Controller, Get, Put, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Put, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiProperty } from '@nestjs/swagger';
+import { IsEmail } from 'class-validator';
 import { Role } from '@prisma/client';
 import { NutritionistService } from './nutritionist.service';
 import { UpdateNutritionistDto } from './dto/update-nutritionist.dto';
@@ -7,6 +8,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+
+class LinkAthleteDto {
+  @ApiProperty({ example: 'atleta@email.com' })
+  @IsEmail({}, { message: 'Email inválido' })
+  email: string;
+}
 
 @ApiTags('nutritionist')
 @ApiBearerAuth('JWT')
@@ -32,6 +39,12 @@ export class NutritionistController {
   @ApiOperation({ summary: 'Listar atletas vinculados' })
   getAthletes(@CurrentUser() user: { id: string }) {
     return this.service.getAthletes(user.id);
+  }
+
+  @Post('athletes/link')
+  @ApiOperation({ summary: 'Vincular atleta existente pelo email' })
+  linkAthlete(@CurrentUser() user: { id: string }, @Body() dto: LinkAthleteDto) {
+    return this.service.linkAthleteByEmail(user.id, dto.email);
   }
 
   @Get('alerts')

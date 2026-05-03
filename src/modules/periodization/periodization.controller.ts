@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 import { Role, TrainingIntensity } from '@prisma/client';
 import { PeriodizationService } from './periodization.service';
 import { PeriodizationRules } from './periodization.engine';
@@ -10,10 +11,13 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 class LogTrainingDto {
+  @ApiProperty({ enum: TrainingIntensity, example: 'HEAVY' })
   @IsEnum(TrainingIntensity)
   intensity: TrainingIntensity;
 
-  @IsOptional() @IsString()
+  @ApiProperty({ required: false, example: 'Leg day — foco em agachamento' })
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
@@ -28,7 +32,10 @@ export class PeriodizationController {
   @Roles(Role.NUTRITIONIST)
   @UseGuards(RolesGuard)
   @ApiOperation({ summary: 'Salvar regras de periodização (nutri)' })
-  saveRules(@Param('mealPlanId') mealPlanId: string, @Body() rules: PeriodizationRules) {
+  saveRules(
+    @Param('mealPlanId') mealPlanId: string,
+    @Body() rules: PeriodizationRules,
+  ) {
     return this.service.saveRules(mealPlanId, rules);
   }
 
@@ -39,7 +46,7 @@ export class PeriodizationController {
   }
 
   @Get('today/:athleteId')
-  @ApiOperation({ summary: 'Macros do dia (ajustadas pela periodização)' })
+  @ApiOperation({ summary: 'Macros do dia ajustadas pela periodização' })
   getTodayMacros(@Param('athleteId') athleteId: string) {
     return this.service.getTodayMacros(athleteId);
   }
@@ -49,9 +56,11 @@ export class PeriodizationController {
   @UseGuards(RolesGuard)
   @ApiOperation({ summary: 'Registrar treino do dia' })
   logTraining(
-    @CurrentUser() user: { athleteId?: string },
+    @CurrentUser() user: { id: string },
     @Body() dto: LogTrainingDto,
   ) {
-    return this.service.logTraining(user.athleteId!, dto.intensity, dto.notes);
+    // Usa o userId do JWT para resolver o athleteId no service
+    // evita depender de um campo extra no payload do token
+    return this.service.logTrainingByUserId(user.id, dto.intensity, dto.notes);
   }
 }
