@@ -23,7 +23,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin: nodeEnv === 'production'
-      ? ['https://app.fuelmatch.app', 'https://fuelmatch.app']
+      ? ['https://app.fuelmatch.app', 'https://fuelmatch.app', 'https://fuelmatch-web.vercel.app']
       : '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
@@ -80,7 +80,7 @@ async function bootstrap() {
     });
   });
 
-  await app.listen(port);
+await app.listen(port, '0.0.0.0');
   console.log(`🔥 FuelMatch API rodando em http://localhost:${port}`);
   console.log(`🌍 Ambiente: ${nodeEnv}`);
 }
