@@ -1,0 +1,76 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Build & Deploy para EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build e push da imagem Docker
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: fuelmatch-api
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:latest" >> $GITHUB_ENV
+
+      - name: Deploy no EC2 via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: IMAGE
+          script: |
+            echo "🚀 Iniciando deploy..."
+            cd /app/fuelmatch
+
+            # Pull da nova imagem
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
+              docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+            docker pull $IMAGE
+
+            # Substituir container
+            docker-compose stop api
+            docker-compose rm -f api
+            IMAGE=$IMAGE docker-compose up -d api
+
+            # Rodar migrations
+            sleep 5
+            docker exec fuelmatch-api npx prisma migrate deploy
+
+            # Health check
+            sleep 3
+            curl -f http://localhost:3000/health || (echo "❌ Health check falhou!" && exit 1)
+
+            echo "✅ Deploy concluído com sucesso!"
+
+      - name: Notificar sucesso
+        if: success()
+        run: echo "Deploy de ${{ github.sha }} realizado com sucesso"
+
+      - name: Notificar falha
+        if: failure()
+        run: echo "❌ Deploy falhou para ${{ github.sha }}"

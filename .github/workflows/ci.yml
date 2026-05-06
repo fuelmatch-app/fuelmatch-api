@@ -1,13 +1,14 @@
-name: CI
+name: CI + Deploy
 
 on:
+  push:
+    branches: [main, develop]
   pull_request:
     branches: [develop, main]
-  push:
-    branches: [develop]
 
 jobs:
-  quality:
+  # ── CI — roda em todo PR e push ──────────────────────────────
+  test:
     name: Lint, Test & Build
     runs-on: ubuntu-latest
 
@@ -37,11 +38,9 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -65,7 +64,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fuelmatch_test
           REDIS_URL: redis://localhost:6379
-          JWT_SECRET: test-secret-for-ci-only
+          JWT_SECRET: ci-secret-for-testing-only
           JWT_EXPIRATION: 15m
           JWT_REFRESH_EXPIRATION: 7d
           NODE_ENV: test
@@ -73,10 +72,17 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload cobertura
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 7
+  # ── Deploy — só roda no push para main ──────────────────────
+  deploy:
+    name: Deploy para Render
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
+          echo "✅ Deploy iniciado no Render"
